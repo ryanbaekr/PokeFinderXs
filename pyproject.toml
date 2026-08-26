@@ -1,0 +1,42 @@
+[project]
+name = "PokeFinderXs"
+version = "1.0.0"
+description = "Cross platform Pokémon RNG tool"
+readme = "README.md"
+license = "GPL-3.0-only"
+authors = [
+    {name = "Ryan Baker"},
+]
+requires-python = ">=3.12"
+classifiers = [
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "numpy==1.26.1",
+    "opencv-python==4.11.0.86",
+    "Pillow==10.0.0",
+    "pywin32==306",
+    "pyserial==3.5",
+    "pygrabber==0.1",
+    "pyautogui",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "mypy",
+    "flake8",
+    "flake8-strict-types",
+    "pip-tools",
+]
+
+[project.urls]
+Repository = "https://github.com/ryanbaekr/PokeFinderXs"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.mypy]
+strict = true
