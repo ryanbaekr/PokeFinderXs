@@ -1,133 +1,277 @@
-import signal
-import sys
-import threading
-from typing import Any
-from typing import Mapping
-from typing import MutableMapping
-from typing import Optional
+# solves camera start up issues
+import os
+os.environ["OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS"] = "0"
+"""GUI Application for blink detection and seed identification"""
+try:
+    import cv2
+    import multiprocessing
+    import os.path
+    import rngtool
+    import serial
+    import signal
+    import sys
+    import threading
+    import time
+    import tkinter as tk
+    from tkinter import ttk
+    from PIL import Image, ImageTk
+    from typing import Any
+    from egg_generator import generate
+except ImportError as import_fail:
+    raise \
+    Exception("Could not import the required modules, " \
+              "make sure you are running with the correct python version, " \
+              "and that packages are installed correctly.") \
+    from import_fail
 
-import tkinter as tk
-from tkinter import ttk
+version = sys.version_info
+if version[0] < 3 or version[1] < 7:
+    raise Exception("Incorrect python version, make sure to run with 3.7+")
+
+os.chdir(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 
 class PokeFinderGUI(tk.Frame):
-    default_config: Mapping[str, Any] = {
-        "tid": 12345,
-        "sid": 54321,
-        "shiny_charm": True,
-        "oval_charm": True,
+    default_config = {
+        "tid": 43313,
+        "sid": 28651,
+        "shiny_charm": False,
+        "oval_charm": False,
         "compatibility_str": "The two seem to get along very well",
         "gender_ratio_str": "88% M / 12% F",
+        "masuda": True,
+        "image": "./images/cave/eye.png",
+        "camera": 1,
+        "display_percent": 35,
+        "view": [805, 465, 130, 130],
+        "thresh": 0.9,
+        "white_delay": 3.0,
     }
 
     def __init__(self, master: tk.Tk):
         super().__init__(master)
         self.master = master
-        self.previewing_thread: Optional[threading.Thread] = None
-        self.previewing: bool = False
-        self.config_json: MutableMapping[str, Any] = {}
+        self.rng = None
+        self.player_eye = None
+        self.player_eye_tk = None
+        self.monitoring_thread = None
+        self.previewing_thread = None
+        self.monitor_tk_buffer = None
+        self.monitor_tk = None
+        self.raw_screenshot = None
+        self.previewing = False
+        self.monitoring = False
+        self.tracking = False
+        self.advances = 0
+        self.keypress_advance = -1
+        self.config_json = self.default_config
         self.pack()
         self.create_widgets()
         signal.signal(signal.SIGINT, self.__signal_handler)
 
     def create_widgets(self) -> None:
-        self.master.title("PokeFinderXs")
+        self.master.title("PokeFinder_Xs")
 
         # col 0
-        ttk.Label(self, text="TID:").grid(column=0, row=0)
-        ttk.Label(self, text="SID:").grid(column=0, row=1)
-        ttk.Label(self, text="Shiny Charm:").grid(column=0, row=2)
-        ttk.Label(self, text="Oval Charm:").grid(column=0, row=3)
-        ttk.Label(self, text="Compatibility:").grid(column=0, row=4)
-        ttk.Label(self, text="Gender Ratio:").grid(column=0, row=5)
-        ttk.Label(self, text="Masuda:").grid(column=0, row=6)
+        ttk.Label(self, text="Progress:").grid(column=0, row=0)
+        ttk.Label(self, text="S[0-1]:").grid(column=0, row=1)
+        ttk.Label(self, text="Advances:").grid(column=0, row=3)
+        ttk.Label(self, text="Keypress Advance:").grid(column=0, row=5)
+        ttk.Label(self, text="").grid(column=0, row=6)
+        ttk.Label(self, text="").grid(column=0, row=7)
+        ttk.Label(self, text="").grid(column=0, row=8)
+        ttk.Label(self, text="").grid(column=0, row=9)
+        ttk.Label(self, text="").grid(column=0, row=10)
+        ttk.Label(self, text="TID:").grid(column=0, row=11)
+        ttk.Label(self, text="SID:").grid(column=0, row=12)
+        ttk.Label(self, text="Shiny Charm:").grid(column=0, row=13)
+        ttk.Label(self, text="Oval Charm:").grid(column=0, row=14)
+        ttk.Label(self, text="Compatibility:").grid(column=0, row=15)
+        ttk.Label(self, text="Gender Ratio:").grid(column=0, row=16)
+        ttk.Label(self, text="Masuda:").grid(column=0, row=17)
 
         # col 1
-        self.tid_input = ttk.Entry(self)
-        self.tid_input.grid(column=1, row=0)
-        self.sid_input = ttk.Entry(self)
-        self.sid_input.grid(column=1, row=1)
-        self.shiny_charm_input = ttk.Combobox(self, values=["No", "Yes"])
-        self.shiny_charm_input.grid(column=1, row=2)
-        self.oval_charm_input = ttk.Combobox(self, values=["No", "Yes"])
-        self.oval_charm_input.grid(column=1, row=3)
-        self.compatibility_input = ttk.Combobox(self, values=[
-            "The two don't seem to like each other",
-            "The two seem to get along",
-            "The two seem to get along very well",
-        ])
-        self.compatibility_input.grid(column=1, row=4)
-        self.gender_ratio_input = ttk.Combobox(self, values=[
-            "50% M / 50% F",
-            "25% M / 75% F",
-            "75% M / 25% F",
-            "88% M / 12% F",
-        ])
-        self.gender_ratio_input.grid(column=1, row=5)
-        ttk.Label(self, text="Yes").grid(column=1, row=6)
+        self.progress = ttk.Label(self, text="0/0")
+        self.progress.grid(column=1, row=0)
+        self.s01_23 = tk.Text(self, width=20, height=2)
+        self.s01_23.grid(column=1, row=1, rowspan=2)
+        self.adv = ttk.Label(self, text=self.advances)
+        self.adv.grid(column=1, row=3)
+        self.keypress_adv = ttk.Label(self, text=self.keypress_advance)
+        self.keypress_adv.grid(column=1, row=5)
+        ttk.Label(self, text="").grid(column=1, row=6)
+        ttk.Label(self, text="").grid(column=1, row=7)
+        ttk.Label(self, text="").grid(column=1, row=8)
+        ttk.Label(self, text="").grid(column=1, row=9)
+        ttk.Label(self, text="").grid(column=1, row=10)
+        self.tid = ttk.Label(self, text=self.config_json["tid"])
+        self.tid.grid(column=1, row=11)
+        self.sid = ttk.Label(self, text=self.config_json["sid"])
+        self.sid.grid(column=1, row=12)
+        self.shiny_charm = ttk.Label(self, text=self.config_json["shiny_charm"])
+        self.shiny_charm.grid(column=1, row=13)
+        self.oval_charm = ttk.Label(self, text=self.config_json["oval_charm"])
+        self.oval_charm.grid(column=1, row=14)
+        self.compatibility = ttk.Label(self, text=self.config_json["compatibility_str"])
+        self.compatibility.grid(column=1, row=15)
+        self.gender_ratio = ttk.Label(self, text=self.config_json["gender_ratio_str"])
+        self.gender_ratio.grid(column=1, row=16)
+        self.masuda = ttk.Label(self, text=self.config_json["masuda"])
+        self.masuda.grid(column=1, row=17)
 
         # col 2
-        ttk.Label(self, text="Parent-1").grid(column=2, row=0)
-        ttk.Label(self, text="Gender:").grid(column=2, row=1)
-        ttk.Label(self, text="Item:").grid(column=2, row=2)
-        ttk.Label(self, text="Parent-2:").grid(column=2, row=4)
-        ttk.Label(self, text="Gender:").grid(column=2, row=5)
-        ttk.Label(self, text="Item:").grid(column=2, row=6)
-
-        # col 3
-        ttk.Label(self, text="M / Ditto").grid(column=3, row=1)
-        ttk.Label(self, text="None").grid(column=3, row=2)
-        ttk.Label(self, text="F / Ditto").grid(column=3, row=5)
-        ttk.Label(self, text="None").grid(column=3, row=6)
+        self.monitor_display_buffer = ttk.Label(self)
+        self.monitor_display_buffer.grid(column=2, row=0, rowspan=64, columnspan=2)
+        self.monitor_display = ttk.Label(self)
+        self.monitor_display.grid(column=2, row=0, rowspan=64, columnspan=2)
 
         # col 4
-        ttk.Label(self, text="Camera:").grid(column=4, row=0)
-        # TODO display
+        self.eye_display = ttk.Label(self)
+        self.eye_display.grid(column=4, row=0, rowspan=10, columnspan=2)
+        ttk.Label(self, text="Camera").grid(column=4, row=10)
+        ttk.Label(self, text="Percent").grid(column=4, row=11)
+        ttk.Label(self, text="X").grid(column=4, row=12)
+        ttk.Label(self, text="Y").grid(column=4, row=13)
+        ttk.Label(self, text="W").grid(column=4, row=14)
+        ttk.Label(self, text="H").grid(column=4, row=15)
+        ttk.Label(self, text="Threshold").grid(column=4, row=16)
+        ttk.Label(self, text="Time Delay").grid(column=4, row=17)
+        self.monitor_blink_button = ttk.Button(self, text="Monitor Blinks", width=16, command=self.monitor_blinks)
+        self.monitor_blink_button.grid(column=4, row=18, columnspan=2)
+        self.preview_button = ttk.Button(self, text="Preview", width=16, command=self.preview)
+        self.preview_button.grid(column=4, row=19, columnspan=2)
 
         # col 5
-        self.camera_index = tk.Spinbox(self, from_=0, to=99, width=5)
-        self.camera_index.grid(column=5, row=0)
-
-        # col 6
-        ttk.Label(self, text="X").grid(column=6, row=0)
-        ttk.Label(self, text="Y").grid(column=6, row=1)
-        ttk.Label(self, text="W").grid(column=6, row=2)
-        ttk.Label(self, text="H").grid(column=6, row=3)
-        ttk.Label(self, text="Threshold").grid(column=6, row=4)
-        self.preview_button = ttk.Button(self, text="Preview", command=self.preview)
-        self.preview_button.grid(column=6, row=5, columnspan=2)
-        self.monitor_blinks_button = ttk.Button(self, text="Monitor Blinks", command=self.monitor_blinks)
-        self.monitor_blinks_button.grid(column=6, row=6, columnspan=2)
-
-        # col 7
-        self.pos_x = tk.Spinbox(self, from_=0, to=99999, width=5)
-        self.pos_x.grid(column=7, row=0)
-        self.pos_y = tk.Spinbox(self, from_=0, to=99999, width=5)
-        self.pos_y.grid(column=7, row=1)
-        self.pos_w = tk.Spinbox(self, from_=0, to=99999, width=5)
-        self.pos_w.grid(column=7, row=2)
-        self.pos_h = tk.Spinbox(self, from_=0, to=99999, width=5)
-        self.pos_h.grid(column=7, row=3)
-        self.pos_th = tk.Spinbox(self, from_=0, to=1, width=5, increment=0.1)
-        self.pos_th.grid(column=7, row=4)
+        self.camera_index = tk.Spinbox(self, from_= 0, to = 99, width = 5)
+        self.camera_index.grid(column=5, row=10)
+        self.display_percent = tk.Spinbox(self, from_ = 0, to = 500, width = 5)
+        self.display_percent.grid(column=5, row=11)
+        self.pos_x = tk.Spinbox(self, from_= 0, to = 99999, width = 5)
+        self.pos_x.grid(column=5, row=12)
+        self.pos_y = tk.Spinbox(self, from_= 0, to = 99999, width = 5)
+        self.pos_y.grid(column=5, row=13)
+        self.pos_w = tk.Spinbox(self, from_= 0, to = 99999, width = 5)
+        self.pos_w.grid(column=5, row=14)
+        self.pos_h = tk.Spinbox(self, from_= 0, to = 99999, width = 5)
+        self.pos_h.grid(column=5, row=15)
+        self.pos_th = tk.Spinbox(self, from_= 0, to = 1, width = 5, increment=0.1)
+        self.pos_th.grid(column=5, row=16)
+        self.whi_del = tk.Spinbox(self, from_= 0, to = 999, width = 5, increment=0.1)
+        self.whi_del.grid(column=5, row=17)
 
         self.camera_index.delete(0, tk.END)
-        self.camera_index.insert(0, "0")
+        self.camera_index.insert(0, 1)
+        self.display_percent.delete(0, tk.END)
+        self.display_percent.insert(0, 35)
         self.pos_x.delete(0, tk.END)
-        self.pos_x.insert(0, "0")
+        self.pos_x.insert(0, 805)
         self.pos_y.delete(0, tk.END)
-        self.pos_y.insert(0, "0")
+        self.pos_y.insert(0, 465)
         self.pos_w.delete(0, tk.END)
-        self.pos_w.insert(0, "40")
+        self.pos_w.insert(0, 130)
         self.pos_h.delete(0, tk.END)
-        self.pos_h.insert(0, "40")
+        self.pos_h.insert(0, 130)
         self.pos_th.delete(0, tk.END)
-        self.pos_th.insert(0, "0.9")
+        self.pos_th.insert(0, 0.9)
+        self.whi_del.delete(0, tk.END)
+        self.whi_del.insert(0, 3.0)
+
+        self.player_eye = cv2.imread(self.config_json["image"], cv2.IMREAD_GRAYSCALE)
+        self.player_eye_tk = self.cv_image_to_tk(self.player_eye)
+        self.eye_display["image"] = self.player_eye_tk
 
         self.after_task()
 
+    @staticmethod
+    def cv_image_to_tk(image):
+        split = cv2.split(image)
+
+        if len(split) == 3:
+            blue, green, red = split
+
+            image = cv2.merge((red, green, blue))
+
+        image = Image.fromarray(image)
+
+        return ImageTk.PhotoImage(image=image)
+
     def monitor_blinks(self) -> None:
-        pass
+        if not self.monitoring:
+            self.monitor_blink_button["text"] = "Stop Monitoring"
+            self.monitoring = True
+            self.monitoring_thread = threading.Thread(target=self.monitoring_work)
+            self.monitoring_thread.daemon = True
+            self.monitoring_thread.start()
+        else:
+            self.monitor_blink_button["text"] = "Monitor Blinks"
+            self.monitoring = False
+
+    def monitoring_work(self) -> None:
+        self.tracking = False
+
+        blinks, intervals, offset_time = rngtool.tracking_blink(
+            self.player_eye,
+            *self.config_json["view"],
+            threshold=self.config_json["thresh"],
+            camera=self.config_json["camera"],
+            tk_window=self,
+        )
+
+        try:
+            self.rng = rngtool.recov(blinks, intervals)
+        except AssertionError as failed_deduction:
+            raise Exception("Failed to deduce seed from monitored blinks.") from failed_deduction
+
+        self.monitor_blink_button["text"] = "Monitor Blinks"
+        self.monitoring = False
+        self.preview()
+
+        waituntil = time.perf_counter()
+        diff = round(waituntil - offset_time)
+        self.rng.get_next_rand_sequence(diff)
+
+        state = self.rng.get_state()
+
+        print(f"{state[0]:08X}{state[1]:08X} {state[2]:08X}{state[3]:08X}")
+        self.s01_23.delete(1.0, tk.END)
+
+        self.s01_23.insert(1.0, f"{state[0]:08X}{state[1]:08X}\n{state[2]:08X}{state[3]:08X}")
+
+        shinies = generate(
+            tid=self.config_json["tid"],
+            sid=self.config_json["sid"],
+            shiny_charm=self.config_json["shiny_charm"],
+            oval_charm=self.config_json["oval_charm"],
+            compatibility_str=self.config_json["compatibility_str"],
+            gender_ratio_str=self.config_json["gender_ratio_str"],
+            masuda=self.config_json["masuda"],
+            seed0=int(f"{state[0]:08X}{state[1]:08X}", 16),
+            seed1=int(f"{state[2]:08X}{state[3]:08X}", 16),
+            initial_advances=0,
+            max_advances=10000,
+        )
+        if len(shinies) == 0:
+            raise Exception("No shinies found")
+        print(shinies[0])
+        self.keypress_advance = int(shinies[0]["Advances"])
+
+        self.advances = 1
+        self.tracking = True
+
+        while self.tracking:
+            self.advances += 1
+
+            if self.advances == self.keypress_advance:
+                # send inputs to switch
+                self.tracking = False
+                break
+            rand = self.rng.get_next_rand_sequence(1)[-1]
+            waituntil += 1.018
+
+            print(f"advances:{self.advances}, blinks:{hex(rand&0xF)}")
+
+            next_time = waituntil - time.perf_counter() or 0
+            time.sleep(next_time)
 
     def preview(self) -> None:
         if not self.previewing:
@@ -140,11 +284,85 @@ class PokeFinderGUI(tk.Frame):
             self.preview_button["text"] = "Preview"
             self.previewing = False
 
-    def previewing_work(self) -> None:
-        pass
+    # pylint: disable=too-many-locals
+    # previewing live updates at any setting change
+    # many local variables are required to do this
+    def previewing_work(self):
+        """Thread work to be done for the preview function"""
+        last_frame_tk = None
+        last_camera = self.config_json["camera"]
+
+        if sys.platform.startswith('linux'): # all Linux
+            backend = cv2.CAP_V4L
+        else: # MS Windows/macOS/otherwise
+            backend = cv2.CAP_ANY # auto-detect via OpenCV
+        video = cv2.VideoCapture(self.config_json["camera"],backend)
+        video.set(cv2.CAP_PROP_FRAME_WIDTH,1920)
+        video.set(cv2.CAP_PROP_FRAME_HEIGHT,1080)
+        video.set(cv2.CAP_PROP_BUFFERSIZE,1)
+        print(f"camera {self.config_json['camera']}")
+
+        while self.previewing:
+            if self.config_json["camera"] != last_camera:
+                video = cv2.VideoCapture(self.config_json["camera"],backend)
+                video.set(cv2.CAP_PROP_FRAME_WIDTH,1920)
+                video.set(cv2.CAP_PROP_FRAME_HEIGHT,1080)
+                video.set(cv2.CAP_PROP_BUFFERSIZE,1)
+                print(f"camera {self.config_json['camera']}")
+                last_camera = self.config_json["camera"]
+
+            eye = self.player_eye
+            eye_width, eye_height = eye.shape[::-1]
+            roi_x, roi_y, roi_w, roi_h = self.config_json["view"]
+            if roi_w < eye_width or roi_h < eye_height:
+                raise Exception("Width and Height of box cannot be smaller than selected eye image")
+            _, frame = video.read()
+            if frame is not None:
+                try:
+                    roi = cv2.cvtColor(frame[roi_y:roi_y+roi_h,roi_x:roi_x+roi_w],
+                                       cv2.COLOR_RGB2GRAY)
+                except cv2.error as empty_frame:
+                    raise Exception("Frame captured is empty, " \
+                                    "make sure your camera/window is set up properly.") \
+                    from empty_frame
+                try:
+                    res = cv2.matchTemplate(roi,eye,cv2.TM_CCOEFF_NORMED)
+                except cv2.error as bad_location:
+                    raise Exception("Tried to read from out of the bounds of " \
+                                    "the image read from camera/window, " \
+                                    "make sure the position of " \
+                                    "the monitoring box is not out of bounds.") \
+                    from bad_location
+                _, match, _, max_loc = cv2.minMaxLoc(res)
+
+                cv2.rectangle(frame,(roi_x,roi_y), (roi_x+roi_w,roi_y+roi_h), (0,0,255), 2)
+                if 0.01<match<self.config_json["thresh"]:
+                    cv2.rectangle(frame,(roi_x,roi_y), (roi_x+roi_w,roi_y+roi_h), 255, 2)
+                else:
+                    max_loc = (max_loc[0] + roi_x,max_loc[1] + roi_y)
+                    bottom_right = (max_loc[0] + eye_width, max_loc[1] + eye_height)
+                    cv2.rectangle(frame,max_loc, bottom_right, 255, 2)
+                self.raw_screenshot = frame
+                if self.config_json["display_percent"] != 100:
+                    _, frame_width, frame_height = frame.shape[::-1]
+                    frame = cv2.resize(frame,
+                                      (round(frame_width*self.config_json["display_percent"]/100),
+                                      round(frame_height*self.config_json["display_percent"]/100)))
+                frame_tk = self.cv_image_to_tk(frame)
+                self.monitor_tk_buffer = last_frame_tk
+                self.monitor_display_buffer['image'] = self.monitor_tk_buffer
+                self.monitor_tk = frame_tk
+                self.monitor_display['image'] = self.monitor_tk
+                last_frame_tk = frame_tk
+        self.monitor_tk_buffer = None
+        self.monitor_tk = None
 
     def after_task(self) -> None:
+        self.adv["text"] = self.advances
+        self.keypress_adv["text"] = self.keypress_advance
+
         self.config_json["camera"] = int(self.camera_index.get())
+        self.config_json["display_percent"] = int(self.display_percent.get())
         self.config_json["view"] = [
             int(self.pos_x.get()),
             int(self.pos_y.get()),
@@ -152,6 +370,8 @@ class PokeFinderGUI(tk.Frame):
             int(self.pos_h.get()),
         ]
         self.config_json["thresh"] = float(self.pos_th.get())
+        self.config_json["white_delay"] = float(self.whi_del.get())
+
         self.after(100, self.after_task)
 
     @staticmethod
