@@ -42,10 +42,9 @@ class PokeFinderGUI(tk.Frame):
         "masuda": True,
         "image": "./images/cave/eye.png",
         "camera": 1,
-        "display_percent": 35,
+        "display_percent": 33,
         "view": [805, 465, 130, 130],
         "thresh": 0.9,
-        "white_delay": 3.0,
     }
 
     def __init__(self, master: tk.Tk):
@@ -74,27 +73,29 @@ class PokeFinderGUI(tk.Frame):
 
         # col 0
         ttk.Label(self, text="Progress:").grid(column=0, row=0)
-        ttk.Label(self, text="S[0-1]:").grid(column=0, row=1)
+        ttk.Label(self, text="Seed 0:").grid(column=0, row=1)
+        ttk.Label(self, text="Seed 1:").grid(column=0, row=2)
         ttk.Label(self, text="Advances:").grid(column=0, row=3)
         ttk.Label(self, text="Keypress Advance:").grid(column=0, row=5)
         ttk.Label(self, text="").grid(column=0, row=6)
         ttk.Label(self, text="").grid(column=0, row=7)
         ttk.Label(self, text="").grid(column=0, row=8)
         ttk.Label(self, text="").grid(column=0, row=9)
-        ttk.Label(self, text="").grid(column=0, row=10)
-        ttk.Label(self, text="TID:").grid(column=0, row=11)
-        ttk.Label(self, text="SID:").grid(column=0, row=12)
-        ttk.Label(self, text="Shiny Charm:").grid(column=0, row=13)
-        ttk.Label(self, text="Oval Charm:").grid(column=0, row=14)
-        ttk.Label(self, text="Compatibility:").grid(column=0, row=15)
-        ttk.Label(self, text="Gender Ratio:").grid(column=0, row=16)
-        ttk.Label(self, text="Masuda:").grid(column=0, row=17)
+        ttk.Label(self, text="TID:").grid(column=0, row=10)
+        ttk.Label(self, text="SID:").grid(column=0, row=11)
+        ttk.Label(self, text="Shiny Charm:").grid(column=0, row=12)
+        ttk.Label(self, text="Oval Charm:").grid(column=0, row=13)
+        ttk.Label(self, text="Compatibility:").grid(column=0, row=14)
+        ttk.Label(self, text="Gender Ratio:").grid(column=0, row=15)
+        ttk.Label(self, text="Masuda:").grid(column=0, row=16)
 
         # col 1
         self.progress = ttk.Label(self, text="0/0")
         self.progress.grid(column=1, row=0)
-        self.s01_23 = tk.Text(self, width=20, height=2)
-        self.s01_23.grid(column=1, row=1, rowspan=2)
+        self.seed_0 = ttk.Label(self, text="N/A")
+        self.seed_0.grid(column=1, row=1)
+        self.seed_1 = ttk.Label(self, text="N/A")
+        self.seed_1.grid(column=1, row=2)
         self.adv = ttk.Label(self, text=self.advances)
         self.adv.grid(column=1, row=3)
         self.keypress_adv = ttk.Label(self, text=self.keypress_advance)
@@ -103,21 +104,20 @@ class PokeFinderGUI(tk.Frame):
         ttk.Label(self, text="").grid(column=1, row=7)
         ttk.Label(self, text="").grid(column=1, row=8)
         ttk.Label(self, text="").grid(column=1, row=9)
-        ttk.Label(self, text="").grid(column=1, row=10)
         self.tid = ttk.Label(self, text=self.config_json["tid"])
-        self.tid.grid(column=1, row=11)
+        self.tid.grid(column=1, row=10)
         self.sid = ttk.Label(self, text=self.config_json["sid"])
-        self.sid.grid(column=1, row=12)
+        self.sid.grid(column=1, row=11)
         self.shiny_charm = ttk.Label(self, text=self.config_json["shiny_charm"])
-        self.shiny_charm.grid(column=1, row=13)
+        self.shiny_charm.grid(column=1, row=12)
         self.oval_charm = ttk.Label(self, text=self.config_json["oval_charm"])
-        self.oval_charm.grid(column=1, row=14)
+        self.oval_charm.grid(column=1, row=13)
         self.compatibility = ttk.Label(self, text=self.config_json["compatibility_str"])
-        self.compatibility.grid(column=1, row=15)
+        self.compatibility.grid(column=1, row=14)
         self.gender_ratio = ttk.Label(self, text=self.config_json["gender_ratio_str"])
-        self.gender_ratio.grid(column=1, row=16)
+        self.gender_ratio.grid(column=1, row=15)
         self.masuda = ttk.Label(self, text=self.config_json["masuda"])
-        self.masuda.grid(column=1, row=17)
+        self.masuda.grid(column=1, row=16)
 
         # col 2
         self.monitor_display_buffer = ttk.Label(self)
@@ -135,11 +135,10 @@ class PokeFinderGUI(tk.Frame):
         ttk.Label(self, text="W").grid(column=4, row=14)
         ttk.Label(self, text="H").grid(column=4, row=15)
         ttk.Label(self, text="Threshold").grid(column=4, row=16)
-        ttk.Label(self, text="Time Delay").grid(column=4, row=17)
         self.monitor_blink_button = ttk.Button(self, text="Monitor Blinks", width=16, command=self.monitor_blinks)
-        self.monitor_blink_button.grid(column=4, row=18, columnspan=2)
+        self.monitor_blink_button.grid(column=4, row=17, columnspan=2)
         self.preview_button = ttk.Button(self, text="Preview", width=16, command=self.preview)
-        self.preview_button.grid(column=4, row=19, columnspan=2)
+        self.preview_button.grid(column=4, row=18, columnspan=2)
 
         # col 5
         self.camera_index = tk.Spinbox(self, from_= 0, to = 99, width = 5)
@@ -156,13 +155,11 @@ class PokeFinderGUI(tk.Frame):
         self.pos_h.grid(column=5, row=15)
         self.pos_th = tk.Spinbox(self, from_= 0, to = 1, width = 5, increment=0.1)
         self.pos_th.grid(column=5, row=16)
-        self.whi_del = tk.Spinbox(self, from_= 0, to = 999, width = 5, increment=0.1)
-        self.whi_del.grid(column=5, row=17)
 
         self.camera_index.delete(0, tk.END)
         self.camera_index.insert(0, 1)
         self.display_percent.delete(0, tk.END)
-        self.display_percent.insert(0, 35)
+        self.display_percent.insert(0, 33)
         self.pos_x.delete(0, tk.END)
         self.pos_x.insert(0, 805)
         self.pos_y.delete(0, tk.END)
@@ -173,8 +170,6 @@ class PokeFinderGUI(tk.Frame):
         self.pos_h.insert(0, 130)
         self.pos_th.delete(0, tk.END)
         self.pos_th.insert(0, 0.9)
-        self.whi_del.delete(0, tk.END)
-        self.whi_del.insert(0, 3.0)
 
         self.player_eye = cv2.imread(self.config_json["image"], cv2.IMREAD_GRAYSCALE)
         self.player_eye_tk = self.cv_image_to_tk(self.player_eye)
@@ -233,9 +228,8 @@ class PokeFinderGUI(tk.Frame):
         state = self.rng.get_state()
 
         print(f"{state[0]:08X}{state[1]:08X} {state[2]:08X}{state[3]:08X}")
-        self.s01_23.delete(1.0, tk.END)
-
-        self.s01_23.insert(1.0, f"{state[0]:08X}{state[1]:08X}\n{state[2]:08X}{state[3]:08X}")
+        self.seed_0["text"] = f"{state[0]:08X}{state[1]:08X}"
+        self.seed_1["text"] = f"{state[2]:08X}{state[3]:08X}"
 
         shinies = generate(
             tid=self.config_json["tid"],
@@ -370,7 +364,6 @@ class PokeFinderGUI(tk.Frame):
             int(self.pos_h.get()),
         ]
         self.config_json["thresh"] = float(self.pos_th.get())
-        self.config_json["white_delay"] = float(self.whi_del.get())
 
         self.after(100, self.after_task)
 
