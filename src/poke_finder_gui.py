@@ -4,10 +4,10 @@ os.environ["OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS"] = "0"
 """GUI Application for blink detection and seed identification"""
 try:
     import cv2
-    import multiprocessing
     import os.path
     import rngtool
     import serial
+    import serial.tools.list_ports
     import signal
     import sys
     import threading
@@ -68,6 +68,11 @@ class PokeFinderGUI(tk.Frame):
         self.create_widgets()
         signal.signal(signal.SIGINT, self.__signal_handler)
 
+    def update_ports(self, *_) -> None:
+        self.com_ports = [port.device for port in serial.tools.list_ports.comports()]
+
+        self.port_combobox["values"] = self.com_ports
+
     def create_widgets(self) -> None:
         self.master.title("PokeFinder_Xs")
 
@@ -88,6 +93,11 @@ class PokeFinderGUI(tk.Frame):
         ttk.Label(self, text="Compatibility:").grid(column=0, row=14)
         ttk.Label(self, text="Gender Ratio:").grid(column=0, row=15)
         ttk.Label(self, text="Masuda:").grid(column=0, row=16)
+
+        self.port_combobox = ttk.Combobox(self, state="readonly", values=[])
+        self.port_combobox.grid(column=0, row=17, rowspan=2, columnspan=2)
+        self.port_combobox.bind("<Button-1>", self.update_ports)
+        self.update_ports()
 
         # col 1
         self.progress = ttk.Label(self, text="0/0")
@@ -210,7 +220,7 @@ class PokeFinderGUI(tk.Frame):
             self.monitoring = False
 
     def monitoring_work(self) -> None:
-        ser = serial.Serial("COM4", 115200)
+        ser = serial.Serial(self.port_combobox.get(), 115200)
 
         # get the controller connected
         for _ in range(0, 2):
