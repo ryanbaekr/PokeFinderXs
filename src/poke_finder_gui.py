@@ -36,14 +36,14 @@ class PokeFinderGUI(tk.Frame):
         "tid": 43313,
         "sid": 28651,
         "shiny_charm": False,
-        "oval_charm": False,
-        "compatibility_str": "The two seem to get along very well",
+        "oval_charm": True,
+        "compatibility_str": "The two seem to get along",
         "gender_ratio_str": "88% M / 12% F",
         "masuda": True,
         "image": "./images/cave/eye.png",
         "camera": 1,
         "display_percent": 33,
-        "view": [805, 465, 130, 130],
+        "view": [910, 620, 50, 50],
         "thresh": 0.9,
     }
 
@@ -210,6 +210,20 @@ class PokeFinderGUI(tk.Frame):
             self.monitoring = False
 
     def monitoring_work(self) -> None:
+        ser = serial.Serial("COM4", 115200)
+
+        # get the controller connected
+        for _ in range(0, 2):
+            # down
+            ser.write(bytearray("+IMM 000004 \n", "ascii"))
+            time.sleep(0.1)
+            # neutral
+            ser.write(bytearray("+IMM 000008 \n", "ascii"))
+            time.sleep(0.1)
+
+        # down
+        ser.write(bytearray("+IMM 000004 \n", "ascii"))
+
         self.tracking = False
 
         blinks, intervals, offset_time = rngtool.tracking_blink(
@@ -250,7 +264,7 @@ class PokeFinderGUI(tk.Frame):
             seed0=int(f"{state[0]:08X}{state[1]:08X}", 16),
             seed1=int(f"{state[2]:08X}{state[3]:08X}", 16),
             initial_advances=0,
-            max_advances=10000,
+            max_advances=1800,
         )
         if len(shinies) == 0:
             raise Exception("No shinies found")
@@ -263,8 +277,13 @@ class PokeFinderGUI(tk.Frame):
         while self.tracking:
             self.advances += 1
 
-            if self.advances == self.keypress_advance:
-                # send inputs to switch
+            if self.advances == (self.keypress_advance + 1):
+                # down + b
+                ser.write(bytearray("+IMM 000204 \n", "ascii"))
+                time.sleep(0.1)
+                # down
+                ser.write(bytearray("+IMM 000004 \n", "ascii"))
+
                 self.tracking = False
                 break
             rand = self.rng.get_next_rand_sequence(1)[-1]
