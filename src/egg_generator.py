@@ -98,12 +98,13 @@ def generate(
 
     gender_ratio_map: Mapping[str, int] = {
         "Genderless": 255,
-        "50% M / 50% F": 127,
+        "100% F": 254,
         "25% M / 75% F": 191,
+        "50% M / 50% F": 127,
         "75% M / 25% F": 63,
         "88% M / 12% F": 31,
+        "Nidoran / VI": 1,
         "100% M": 0,
-        "100% F": 254,
     }
 
     gender_map: Mapping[bool, str] = {
@@ -168,6 +169,8 @@ def generate(
                 raise NotImplementedError
             elif gender_ratio == 254:
                 raise NotImplementedError
+            elif gender_ratio == 1:
+                gender: bool = bool(rng.next(2))
             elif gender_ratio == 0:
                 raise NotImplementedError
             else:
@@ -235,15 +238,15 @@ if __name__ == "__main__":
     oval_charm: bool = True
 
     # daycare data
-    compatibility_str: str = "The two seem to get along very well"
-    gender_ratio_str: str = "88% M / 12% F"
+    compatibility_str: str = "The two seem to get along"
+    gender_ratio_str: str = "Nidoran / VI"
     masuda: bool = True
 
     # rng data
     seed0: int = 0x1234567887654321
     seed1: int = 0x8765432112345678
     initial_advances: int = 0
-    max_advances: int = 1000
+    max_advances: int = 10000
 
     print(generate(
         tid,
@@ -263,5 +266,4 @@ if __name__ == "__main__":
 - Account for items
 - Handle 100% and Genderless gender ratios
 - Calculate actual Ability
-- Account for Nidoran, Volbeat/Illumise
 """
