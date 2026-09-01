@@ -41,7 +41,7 @@ class PokeFinderGUI(tk.Frame):
         "gender_ratio_str": "Nidoran / VI",
         "masuda": True,
         "image": "./images/cave/eye.png",
-        "camera": 1,
+        "camera": 0,
         "display_percent": 33,
         "view": [910, 620, 50, 50],
         "thresh": 0.9,
@@ -234,6 +234,59 @@ class PokeFinderGUI(tk.Frame):
         # down
         ser.write(bytearray("+IMM 000004 \n", "ascii"))
 
+        blinks, intervals, offset_time = rngtool.tracking_blink(
+            self.player_eye,
+            *self.config_json["view"],
+            threshold=self.config_json["thresh"],
+            camera=self.config_json["camera"],
+            tk_window=self,
+        )
+
+        try:
+            self.rng = rngtool.recov(blinks, intervals)
+        except AssertionError as failed_deduction:
+            raise Exception("Failed to deduce seed from monitored blinks.") from failed_deduction
+
+        waituntil = time.perf_counter()
+        diff = round(waituntil - offset_time)
+        self.rng.get_next_rand_sequence(diff)
+
+        state = self.rng.get_state()
+
+        print(f"{state[0]:08X}{state[1]:08X} {state[2]:08X}{state[3]:08X}")
+
+        shinies = generate(
+            tid=self.config_json["tid"],
+            sid=self.config_json["sid"],
+            shiny_charm=self.config_json["shiny_charm"],
+            oval_charm=self.config_json["oval_charm"],
+            compatibility_str=self.config_json["compatibility_str"],
+            gender_ratio_str=self.config_json["gender_ratio_str"],
+            masuda=self.config_json["masuda"],
+            seed0=int(f"{state[0]:08X}{state[1]:08X}", 16),
+            seed1=int(f"{state[2]:08X}{state[3]:08X}", 16),
+            initial_advances=440,
+            max_advances=5440,
+        )
+        if len(shinies) == 0:
+            raise Exception("No shinies found")
+
+        print(shinies[0])
+        temp = int(shinies[0]["Advances"])
+
+        while temp > 440:
+            if (temp % 600) == 0:
+                # neutral
+                ser.write(bytearray("+IMM 000008 \n", "ascii"))
+                time.sleep(0.5)
+                # down
+                ser.write(bytearray("+IMM 000004 \n", "ascii"))
+                time.sleep(0.5)
+            else:
+                time.sleep(1)
+            temp -= 1
+            print(temp)
+
         self.tracking = False
 
         blinks, intervals, offset_time = rngtool.tracking_blink(
@@ -274,10 +327,9 @@ class PokeFinderGUI(tk.Frame):
             seed0=int(f"{state[0]:08X}{state[1]:08X}", 16),
             seed1=int(f"{state[2]:08X}{state[3]:08X}", 16),
             initial_advances=0,
-            max_advances=1800,
+            max_advances=400,
         )
-        if len(shinies) == 0:
-            raise Exception("No shinies found")
+
         print(shinies[0])
         self.keypress_advance = int(shinies[0]["Advances"])
 

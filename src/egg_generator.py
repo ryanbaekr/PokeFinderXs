@@ -158,7 +158,7 @@ def generate(
 
     hits: MutableSequence[Mapping[str, str]] = []
 
-    for count in range(initial_advances, max_advances + 1):
+    for count in range(0, max_advances + 1):
         if rng_list.next(100) < compatibility:
             sem: int = 0x80000000
             seed: int = (rng_list.next() ^ sem) - sem
@@ -205,24 +205,25 @@ def generate(
             for _ in range(pid_rolls):
                 pid: int = rng.next(0xFFFFFFFF)
                 if is_shiny(pid, tsv):
-                    hits.append(
-                        {
-                            "Advances": f"{count}",
-                            "Egg Seed": f"{seed & 0xFFFFFFFF:X}",
-                            "PID": f"{pid & 0xFFFFFFFF:X}",
-                            "Shiny": "Yes",
-                            "Nature": f"{nature_map[nature]}",
-                            "Ability": f"{ability}",
-                            "HP": f"{iv_array[0]}",
-                            "Atk": f"{iv_array[1]}",
-                            "Def": f"{iv_array[2]}",
-                            "SpA": f"{iv_array[3]}",
-                            "SpD": f"{iv_array[4]}",
-                            "Spe": f"{iv_array[5]}",
-                            "Gender": f"{gender_map[gender]}",
-                            "EC": f"{ec & 0xFFFFFFFF:X}",
-                        }
-                    )
+                    if count >= initial_advances:
+                        hits.append(
+                            {
+                                "Advances": f"{count}",
+                                "Egg Seed": f"{seed & 0xFFFFFFFF:X}",
+                                "PID": f"{pid & 0xFFFFFFFF:X}",
+                                "Shiny": "Yes",
+                                "Nature": f"{nature_map[nature]}",
+                                "Ability": f"{ability}",
+                                "HP": f"{iv_array[0]}",
+                                "Atk": f"{iv_array[1]}",
+                                "Def": f"{iv_array[2]}",
+                                "SpA": f"{iv_array[3]}",
+                                "SpD": f"{iv_array[4]}",
+                                "Spe": f"{iv_array[5]}",
+                                "Gender": f"{gender_map[gender]}",
+                                "EC": f"{ec & 0xFFFFFFFF:X}",
+                            }
+                        )
                     break
 
             rng_list.back()
