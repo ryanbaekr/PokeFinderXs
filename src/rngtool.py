@@ -26,7 +26,7 @@ def tracking_blink(img,
                    roi_w,
                    roi_h,
                    threshold = 0.9,
-                   size = 40,
+                   size = 41,
                    camera = 0,
                    tk_window = None)->Tuple[List[int],List[int],float]:
     """measuring the type and interval of player's blinks
@@ -135,7 +135,7 @@ def tracking_blink(img,
         frame_tk = None
         last_frame_tk = None
     video.release()
-    return (blinks, intervals, offset_time)
+    return (blinks[1:], intervals[1:], offset_time)
 
 def tracking_blink_manual(size = 40, reidentify = False)->Tuple[List[int],List[int],float]:
     """measuring the type and interval of player's blinks manually
